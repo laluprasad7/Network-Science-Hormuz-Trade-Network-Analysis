@@ -1,0 +1,908 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath, amssymb}
+\usepackage{xcolor}
+\usepackage[hidelinks, colorlinks=true, linkcolor=blue!50!black,
+            citecolor=blue!50!black, urlcolor=blue!60!black]{hyperref}
+\usepackage[round, authoryear]{natbib}
+\usepackage{titlesec}
+\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{enumitem}
+\usepackage{float}
+
+\graphicspath{{../figures/}{../figures/phase0/}{../figures/phase1/}%
+              {../figures/phase2/}{../figures/phase3/}{../figures/phase4/}%
+              {../figures/phase5/}}
+
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+% ---- Custom title block with IITR logo ----
+\begin{center}
+  \begin{minipage}{0.13\textwidth}
+    \includegraphics[width=\linewidth]{IITR_logo.png}
+  \end{minipage}\hfill
+  \begin{minipage}{0.83\textwidth}
+    \raggedright
+    {\small Indian Institute of Technology Roorkee \\
+     \textbf{DAL-311 --- Network Science}}\\[6pt]
+    {\Large \textbf{Trade-Network Resilience and the Strait of Hormuz:}}\\
+    {\large \textbf{A Multi-Layer Exposure Analysis of Five Commodity
+                    Networks (2020--2024)}}
+  \end{minipage}
+\end{center}
+
+\bigskip
+\begin{center}
+  \textbf{Group members}\\[4pt]
+  \begin{tabular}{ll}
+    Preetham Gunta      & Vineel Krishna Manchala \\
+    Laluprasad Ramavath & Prabhath Kolli          \\
+  \end{tabular}
+  \\[6pt]
+  \textit{May 2026}
+\end{center}
+\rule{\textwidth}{0.4pt}\medskip
+
+\begin{abstract}
+The Strait of Hormuz carries roughly a fifth of the world's
+seaborne energy trade, and a closure or partial blockade would propagate
+asymmetrically across commodity-specific trade networks. We assemble
+six years (2020--2025) of bilateral monthly trade flows, tanker-capacity
+indicators and benchmark prices to build five directed weighted commodity
+networks --- wheat, ammonia, urea, LPG propane, and LPG butane --- and
+measure their exposure to a Hormuz disruption. Using community
+detection, weighted topological metrics and targeted-attack simulations,
+we show that LPG butane is the most fragile layer: removing Hormuz
+exporters wipes out 48.5\,\% of trade volume and 32.4\,\% of weighted
+global efficiency in 2024. A bivariate Vector AutoRegression and a
+Spatial Durbin panel model identify a small but consistent network-
+contagion coefficient ($\rho \approx 0.11$) and a statistically
+significant Granger link from Hormuz tanker capacity to ammonia prices.
+A scenario engine combining structural disruption with the
+spatial-econometric multipliers projects that under a six-month
+realignment scenario, India alone faces an annualised import-value loss
+of \$7.6 billion --- driven entirely by its $\approx\!97\,\%$ Hormuz
+dependence on LPG. We discuss the methodological limits of the
+econometric channel and the policy implications of LPG concentration.
+\end{abstract}
+
+% =====================================================================
+\section{Introduction and problem statement}
+% =====================================================================
+
+The Strait of Hormuz is the maritime corridor between the Persian Gulf
+and the Gulf of Oman, through which an estimated 17--20\,\% of global
+oil-equivalent energy and over a quarter of global LPG trade transits
+\citep{eia_hormuz}. Repeated geopolitical episodes (the 2019 tanker
+seizures, the 2024 Iran--Israel exchange, recurring threats to ``close''
+the strait) have repeatedly raised the question: \emph{how exposed is
+each commodity-specific trade network to a Hormuz disruption, and how
+would a shock propagate across countries?}
+
+\paragraph{Research questions.} This project tackles five concrete
+questions:
+\begin{enumerate}[leftmargin=2em, itemsep=0.1em]
+  \item \textbf{Structure.} Are the five commodity networks
+        topologically similar, or do they have distinct exposure
+        signatures to Hormuz exporters?
+  \item \textbf{Exposure.} Which countries are most exposed, and is
+        ``exposure'' best captured by direct bilateral share, by
+        global centrality, or by an information-flow measure?
+  \item \textbf{Resilience.} How much trade volume and connectivity is
+        lost when Hormuz exporter rows are removed from each network?
+  \item \textbf{Dynamics.} Does Hormuz tanker capacity Granger-cause
+        commodity price movements, and does shock propagation across
+        the network amplify imports' co-movement?
+  \item \textbf{Scenarios.} Under a 14-day shock, a 30--45 day
+        rupture, and a 6-month realignment of trade routes, what is
+        the projected country-level dollar impact on imports?
+\end{enumerate}
+
+\paragraph{Why a multi-layer treatment.} Treating ``trade'' as a single
+flow understates the very different role Hormuz plays for, e.g.,
+LPG (where Gulf states are dominant exporters) versus wheat (where they
+are net importers). The five layers chosen here separate energy
+(LPG~butane, LPG~propane), agriculture (wheat) and fertilizer
+(ammonia, urea) so that the structural effects of a Hormuz disruption
+are not averaged out across heterogeneous flows.
+
+% =====================================================================
+\section{Data sources and collection}
+% =====================================================================
+
+The pipeline draws on five public, machine-readable databases:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \textbf{UN Comtrade Plus} \citep{comtrade}: bilateral monthly
+        trade flows by HS code. We extract HS~1001 (wheat),
+        HS~2814 (ammonia), HS~3102\,10 (urea), HS~2711\,12 (LPG
+        propane) and HS~2711\,13 (LPG butane) for 2020--2025
+        (204\,019 reporter-partner-month observations).
+  \item \textbf{IMF PortWatch} \citep{portwatch}: daily counts and
+        deadweight tonnage (DWT) of vessels transiting global
+        chokepoints. We use the Hormuz daily tanker series, aggregated
+        to monthly $n_\text{tanker}$ and capacity $\text{DWT}$.
+  \item \textbf{World Bank Pink Sheet} \citep{worldbank_cmo}: global
+        benchmark prices --- US~HRW wheat, urea, DAP (used as ammonia
+        proxy), and LNG~Japan (used as butane proxy). Monthly,
+        2020-01 to 2026-02.
+  \item \textbf{FRED} \citep{fred}: daily Mont~Belvieu propane spot,
+        averaged to monthly. Pre-2021-03 values are backfilled from a
+        scaled LNG~Japan index (overlap-mean calibration on
+        2021-03..2021-12).
+  \item \textbf{JODI World Database} \citep{jodi}: country-level NGL
+        production, imports, exports and stocks (used for
+        reserve-threshold calibration of Phase~1 robustness checks).
+\end{itemize}
+
+% =====================================================================
+\section{Data preprocessing}
+% =====================================================================
+
+Each raw source is normalised into a tidy CSV under
+\texttt{Processed\_Data/}. The main interventions are:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \emph{Comtrade.} A 47-column / 46-value header shift in the
+        upstream CSV is corrected by dropping a leading
+        \texttt{typeCode} field and a trailing pad. We remove
+        964 self-loops (a country reporting trade with itself) and
+        21 constant or unused columns. World-totals and bilateral
+        rows are split into two files; HS codes are mapped to short
+        layer labels.
+  \item \emph{Pink Sheet.} The two-row Excel header band is flattened
+        (commodity name + unit on the prices sheet, nested category
+        on the indices sheet); the multilingual missing-value markers
+        \texttt{\dots} and the cp1252 replacement glyph are coerced
+        to \texttt{NaN}.
+  \item \emph{FRED propane.} A 2020-01..2021-02 coverage gap is
+        backfilled from the LNG-Japan series scaled to its 2021
+        overlap mean, so that log-differences remain continuous.
+  \item \emph{PortWatch.} Daily UTC timestamps are parsed; zero-traffic
+        days (legitimate, not missing) are preserved; daily counts
+        and DWT are summed to monthly with a \texttt{n\_days}
+        quality flag.
+  \item \emph{JODI.} Seven yearly files are concatenated, filtered to
+        the \texttt{KTONS} unit to remove a 5-unit redundancy, and
+        pivoted to a wide NGL panel covering 65--72 reporters with
+        89.6--96.6\,\% cell completeness on the four flows used for
+        reserve calibration.
+\end{itemize}
+
+The cleaned monthly Comtrade panel covers 153 reporter countries and
+five layers across 72 months (2020-01..2025-12). Country ISO3 codes are
+used throughout; non-ISO reporters (\texttt{S19} ``Other Asia'') are
+dropped.
+
+% =====================================================================
+\section{Methodology}
+% =====================================================================
+
+The pipeline is organised in five phases. Methods that are well-known
+or borrowed from the literature are stated briefly with a citation; the
+specific metrics adapted to the trade-network context are explained in
+more detail.
+
+\subsection{Phase 0 --- Trade matrix construction}
+
+For each (year, layer) we build a $N \!\times\! N$ matrix
+$W_{y,L}$ with $W_{ij}$ equal to the USD value exported from country
+$i$ to country $j$, where $N = 153$. We hold the country index fixed so
+that all matrices share a common axis. The binary support
+$A_{y,L} = \mathbf{1}\{W_{y,L} > 0\}$ is also stored. Bilateral flows
+are reconciled with World totals using a single-pass
+RAS-style row/column rebalance to keep marginal sums consistent under
+small reporter / partner mismatches; the 2020 \texttt{DEU} HS\,1001
+sanity check matches to floating-point tolerance.
+
+\subsection{Phase 1 --- Composite exposure score}
+
+For each (country, year, layer) we compute eight exposure metrics and
+combine them into a single $z$-score composite (rescaled to
+[0, 1]). The metrics are:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.15em]
+  \item \textbf{DE} (\emph{Direct Exposure}) --- the share of country
+        $i$'s imports in layer $L$ that come from Hormuz exporters.
+        A simple bilateral-trade ratio.
+  \item \textbf{SR} (\emph{Source Redundancy}) --- the
+        Herfindahl-Hirschman concentration of country $i$'s import
+        sources; high SR means imports come from few partners and so
+        the country has little fallback capacity.
+  \item \textbf{Betweenness centrality} --- the fraction of weighted
+        shortest paths in the network that pass through node $i$.
+        High betweenness means $i$ sits on many trade routes.
+  \item \textbf{Katz centrality} --- a recursive count of all walks
+        ending at $i$, attenuated by a factor $\alpha$. It rewards
+        nodes that are reached by many paths, including indirect ones.
+  \item \textbf{PPR} (\emph{Personalised PageRank}) --- the steady-state
+        probability that a random walker, restarted at the Hormuz set,
+        visits node $i$. A natural ``influence-from-Hormuz'' score.
+  \item \textbf{Leontief multiplier} --- the diagonal of
+        $(I-\beta W^\top)^{-1}$, capturing a country's exposure to
+        upstream supply through all rounds of intermediate trade
+        (the input-output amplification).
+  \item \textbf{DebtRank} \citep{battiston2012} --- a recursive
+        ``shock from Hormuz'' diffusion that respects each node's
+        absorption capacity, originally developed for systemic
+        financial risk.
+  \item \textbf{PIVI} (\emph{Path-Integrated Vulnerability Index}) ---
+        a compound metric that integrates exposure across all
+        directed paths from Hormuz to the focal country, weighted by
+        path-attenuation.
+\end{itemize}
+
+The eight metrics are standardised ($z$-scored within each year and
+layer), averaged, and rescaled to the $[0, 1]$ \texttt{composite\_01}
+score (Phase~1.2). The eight metrics are positively but not perfectly
+correlated (Figure~\ref{fig:metric-corr}), so the composite is more
+than a relabelling of any single index.
+
+\subsection{Phase 2 --- Network topology and resilience}
+
+\textbf{Community detection.} We run InfoMap
+\citep{rosvall2008} --- an information-theoretic community-detection
+algorithm that minimises the description length of a random walk on
+the network. Communities are reported per (year, layer); the
+\emph{primary Hormuz community} is defined as the single module
+containing the most Hormuz members (ties broken by smaller size). This
+fixes a labelling-instability issue under InfoMap's stochastic seed
+and gives a stable measure of bloc cohesion.
+
+\textbf{Topology metrics.} For each network we compute density,
+overall reciprocity \citep{garlaschelli2004},
+average undirected clustering, the size of the largest weakly /
+strongly connected components (LWCC, LSCC) and weighted
+\emph{global efficiency} \citep{latora2001} on cost~$=1/W$.
+
+\textbf{Targeted attack.} The Hormuz attack zeroes out all
+out-going edges from the seven Hormuz countries
+$\{$ARE, BHR, IRN, IRQ, KWT, QAT, SAU$\}$ and reports
+flow loss, importers cut to zero, the relative LWCC retained, and the
+relative drop in global efficiency. This is the standard targeted
+node-removal scheme of \citet{albert2000} adapted to weighted directed
+graphs.
+
+\subsection{Phase 3 --- Panel econometrics}
+
+\textbf{Bivariate VAR.} For each layer we fit a Vector AutoRegression
+\citep{sims1980} on
+$[\,\Delta\!\log\text{price}_t,\, \text{DWT}_t\,]$, with lag
+order chosen by BIC (max 4) and Cholesky identification ordering DWT
+first. Granger causality \citep{granger1969} is tested in the
+``DWT $\rightarrow$ price'' direction, and a 12-month orthogonalised
+impulse-response function (IRF) is reported with asymptotic 95\,\%
+confidence bands.
+
+\textbf{Panel regression.} For each layer we estimate
+\[
+  \log \text{import}_{it}
+   \;=\; \alpha_i \;+\; \alpha_t
+   \;+\; \beta_1 \log p_t
+   \;+\; \beta_2 \,\text{DWT}_t
+   \;+\; \gamma_3 \,\text{DE}_i \!\times\! \text{DWT}_t
+   \;+\; \varepsilon_{it}
+\]
+with country and time fixed effects. The interaction
+$\gamma_3$ is the parameter of substantive interest --- it tests
+whether more-exposed countries (higher DE) co-move with Hormuz
+capacity differently from less-exposed ones.
+
+\textbf{Spatial Durbin Model.} The annual analogue uses
+\texttt{spreg.Panel\_FE\_Lag} with W~=~row-normalised 2020 trade-share
+matrix \citep{lesage2009, rey2010}:
+\[
+  \log\text{import}_{it} = \rho\,W \log\text{import}_{t}
+   + X_{it}\boldsymbol\beta + \mu_i + \varepsilon_{it}.
+\]
+The spatial autoregressive coefficient $\rho$ captures
+\emph{network contagion}: how much a country's imports co-move with
+those of its weighted trade partners after controlling for direct
+exposure and global price. We complement this with an SLX (Spatial
+Lag of $X$) specification that estimates the indirect / spillover
+effect $\theta$ of price and DE without the simultaneity of the lag
+in $Y$.
+
+\subsection{Phase 4 --- Scenario simulation engine}
+
+Three Hormuz disruption scenarios are simulated:
+
+\smallskip
+\begin{tabular}{ll}
+\textbf{S1 --- 14-day transient shock} &
+   $\Delta\!\text{DWT}_t = -0.5$ for $t = 1$, then 0. \\[2pt]
+\textbf{S2 --- 30--45 day rupture} &
+   $\Delta\!\text{DWT}_t = (-0.9, -0.9, -0.4, 0, \dots)$. \\[2pt]
+\textbf{S3 --- 6-month persistent realignment} &
+   $\Delta\!\text{DWT}_t = -0.7$ for $t = 1, \dots, 6$, tapered after.
+\end{tabular}
+\smallskip
+
+For each scenario, country, layer and month we sum two channels:
+
+\begin{enumerate}[leftmargin=1.4em, itemsep=0.1em]
+  \item \emph{Structural channel.} $\log(1 - \text{DE}_i \cdot
+        \max(-\Delta\!\text{DWT}_t, 0))$. This captures the trade-
+        network supply disruption in proportion to the country's
+        Hormuz dependence.
+  \item \emph{Price channel.} The long-run cumulative IRF of
+        $\Delta\!\log p$ to a Hormuz DWT shock, scaled by the SDM
+        $\beta_{\log p}$ coefficient, gives a per-period log-import
+        deviation at a given DWT level.
+\end{enumerate}
+
+The two channels are added and multiplied by the SDM Leontief
+amplifier $1 / (1 - \rho)$. To avoid the explosive accumulation
+that arises from convolving the IRF over a sustained shock, the
+price channel uses the long-run IRF as a per-period steady-state
+elasticity. Cumulative monthly log-changes are normalised to an
+average-monthly metric (divide by 12) before exponentiating to a
+percentage. Annual dollar impact is the average percentage change
+applied to 2024 baseline imports.
+
+% =====================================================================
+\section{Results}
+% =====================================================================
+
+\subsection{The five commodity networks at a glance}
+
+Figure~\ref{fig:network-panel} shows the top-60 weighted edges of each
+2024 commodity network. Across all panels, \emph{nodes} are countries
+(ISO3); \emph{edges} are directed exporter $\rightarrow$ importer
+flows; \emph{node size} scales with weighted in+out degree (a country's
+total trade involvement); \emph{node colour} flags Hormuz exporters in
+red. Edge width and opacity are proportional to trade weight.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{fig5_network_panel_2024}
+  \caption{Top-60-edge bilateral trade networks for the five
+  commodity layers, 2024. Hormuz exporter states (red) are central
+  hubs in both LPG layers and dominate ammonia/urea flows; in wheat
+  they appear only as importers (small red satellites).}
+  \label{fig:network-panel}
+\end{figure}
+
+The visual summary mirrors the global statistics: in LPG butane and
+LPG propane the red Hormuz nodes are large and well connected; in
+wheat they are small importer nodes at the periphery. The ammonia
+and urea networks are intermediate, with Gulf exporters playing a
+substantial role.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{fig5_network_lpg_butane_2024}
+  \caption{LPG butane bilateral trade network (2024), top 90 edges.
+  Saudi Arabia (SAU), United Arab Emirates (ARE) and Qatar (QAT) are
+  the dominant export hubs; India (IND), Japan (JPN) and China
+  (CHN) are the largest importer hubs.}
+  \label{fig:network-lpg}
+\end{figure}
+
+\subsection{Hormuz share of trade and exposure landscape}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig0_hormuz_share}
+  \caption{Hormuz exporter share of global trade volume by layer and
+  year. LPG butane is the most concentrated (35--50\,\%), wheat the
+  least (under 1\,\%).}
+  \label{fig:hormuz-share}
+\end{figure}
+
+The Phase~1 composite exposure (Figure~\ref{fig:composite-heatmap})
+combines all eight metrics into a single $[0, 1]$ score. The eight
+underlying metrics correlate positively but capture distinct
+information (Figure~\ref{fig:metric-corr}): DE and PPR are highly
+correlated, while betweenness and DebtRank pick up complementary
+structural roles.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\textwidth}
+    \includegraphics[width=\linewidth]{fig1_composite_heatmap_2024}
+    \caption{2024 composite exposure heatmap.}
+    \label{fig:composite-heatmap}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.48\textwidth}
+    \includegraphics[width=\linewidth]{fig1_metric_correlation}
+    \caption{Cross-metric correlation across 5 layers and 5 years.}
+    \label{fig:metric-corr}
+  \end{subfigure}
+  \caption{Phase~1 composite exposure (left) is concentrated on
+  South and East Asian importers in the LPG layers. The eight
+  underlying metrics (right) correlate positively but are not
+  redundant: bilateral DE and the random-walk PPR cluster together,
+  while betweenness and DebtRank pick up complementary structural
+  roles.}
+\end{figure}
+
+The composite ranking confirms what visual inspection of the network
+suggests, but quantifies it: India tops the LPG butane and LPG
+propane ranks with composite scores of 1.00, driven by 96--98\,\%
+direct dependence (DE) on Hormuz exporters and the largest absolute
+import volumes in the world. Table~\ref{tab:top-composite} lists the
+top-7 most-exposed countries in each LPG layer in 2024.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Top-7 most-exposed countries in 2024 by composite score.}
+\label{tab:top-composite}
+\begin{tabular}{lcc@{\hskip 1.2cm}lcc}
+\toprule
+\multicolumn{3}{c}{\textbf{LPG butane}} & \multicolumn{3}{c}{\textbf{LPG propane}} \\
+\cmidrule(r){1-3}\cmidrule(l){4-6}
+Country & DE & composite & Country & DE & composite \\
+\midrule
+India       & 0.98 & 1.00 & India       & 0.97 & 1.00 \\
+China       & 0.61 & 0.77 & China       & 0.28 & 0.93 \\
+Hong Kong   & 0.00 & 0.61 & Myanmar     & 0.00 & 0.69 \\
+Thailand    & 0.81 & 0.51 & Thailand    & 0.91 & 0.52 \\
+Malaysia    & 0.59 & 0.50 & Philippines & 0.90 & 0.50 \\
+Philippines & 0.81 & 0.49 & Yemen       & 1.00 & 0.48 \\
+Singapore   & 0.81 & 0.46 & Oman        & 1.00 & 0.48 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The presence of Hong Kong and Myanmar with DE = 0 but high composite
+score is a useful sanity check on the methodology: these countries
+do not buy LPG \emph{directly} from Hormuz states but sit on the
+trans-shipment routes that re-distribute Gulf cargoes through
+Singapore and the South-China Sea --- a structural exposure that the
+betweenness, Katz and PPR components of the composite correctly pick
+up even when the direct bilateral share is zero.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{fig1_top_countries_lpg_butane_2024}
+    \caption{Top countries by composite exposure (2024).}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{fig1_top5_timeseries_lpg_butane}
+    \caption{Composite trajectory 2020--2024.}
+  \end{subfigure}
+  \caption{LPG butane exposure: India sits well above all peers in
+  every year of the panel; China rises noticeably from 2022 onward
+  as its butane demand outgrows domestic supply. The top-5 ranks are
+  stable across the five years --- the exposure landscape is a
+  structural feature of the network, not a year-specific artefact.}
+  \label{fig:lpg-top-countries}
+\end{figure}
+
+\subsection{Network topology over time}
+
+Topological metrics are stable across 2020--2024
+(Table~\ref{tab:topology}, Figure~\ref{fig:topology-grid}). All five
+networks have a single weakly-connected component
+(LWCC $\approx 1$), low density (5--8\,\%) and reciprocity
+0.25--0.34. Wheat has the highest reciprocity (many countries are
+both exporter and importer), urea the densest network.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Mean topology metrics across 2020--2024 by layer.}
+\label{tab:topology}
+\begin{tabular}{lccccc}
+\toprule
+Layer & Density & Reciprocity & Avg.\ clustering & LWCC frac.\ &
+   Global eff.\ ($\times 10^6$) \\
+\midrule
+Wheat       & 0.065 & 0.342 & 0.484 & 1.000 & 3.17 \\
+Ammonia     & 0.062 & 0.289 & 0.554 & 1.000 & 0.81 \\
+Urea        & 0.084 & 0.335 & 0.507 & 0.997 & 1.69 \\
+LPG propane & 0.048 & 0.254 & 0.424 & 1.000 & 3.65 \\
+LPG butane  & 0.056 & 0.273 & 0.457 & 1.000 & 1.73 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{fig2_topology_grid}
+  \caption{Density, reciprocity, average clustering and LWCC fraction
+  by year and layer. The five networks evolve smoothly with no
+  structural break across the modelling window.}
+  \label{fig:topology-grid}
+\end{figure}
+
+A few patterns are worth pointing out. \emph{Reciprocity} is highest
+in wheat and urea ($\approx\!0.34$): many countries are simultaneously
+import\-ers and re-exporters of these commodities, so most edges have
+a counter-flow. The two LPG layers have the lowest reciprocity
+($0.25$--$0.27$) --- the Gulf-to-Asia LPG trade is overwhelmingly
+one-directional, an asymmetry that compounds vulnerability under a
+Hormuz disruption. \emph{Average clustering} ranges from 0.42
+(LPG propane) to 0.55 (ammonia), with the higher figures indicating
+denser local triangles around regional fertilizer hubs (e.g.\ the
+Gulf-Russia-Egypt fertilizer triangle).
+
+\paragraph{Community detection.}
+InfoMap returns 8--15 communities per layer. The two LPG layers are
+the most fragmented (10 and 15 communities respectively), reflecting
+multiple regional sub-markets (East Asia, West Africa, Latin
+America). The ammonia and urea networks are more centralised
+(8 communities), and the wheat layer is split into eight modules
+that broadly mirror geographic continents.
+
+\begin{table}[H]
+\centering
+\small
+\caption{2024 community structure and the primary Hormuz bloc.}
+\label{tab:communities}
+\begin{tabular}{lcccc}
+\toprule
+Layer & \#\,communities & Modularity Q & Primary bloc size &
+   \% of H exports inside \\
+\midrule
+Wheat       & 8  & 0.50 & 20 & 31\,\% \\
+Ammonia     & 8  & 0.57 & 32 & \textbf{88\,\%} \\
+Urea        & 8  & 0.41 & 33 & 46\,\% \\
+LPG propane & 10 & 0.30 & 13 & 61\,\% \\
+LPG butane  & 15 & 0.45 & 19 & \textbf{90\,\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The most striking column of Table~\ref{tab:communities} is the share
+of Hormuz exports that stay inside the primary Hormuz community.
+For ammonia and LPG~butane, $\sim\!90\,\%$ of all Hormuz outflow
+lands within a single tightly-bound module of $\sim\!20$--$30$
+countries --- the cluster of importers that is functionally
+\emph{dependent} on the Hormuz route. For wheat, the figure is only
+31\,\%, simply because Hormuz states are wheat importers themselves
+and their tiny export flows go in many different directions. The
+combination of high concentration (ammonia, LPG~butane) with high
+Hormuz centrality identifies the layers where a regional shock has
+a clean transmission channel through a structurally cohesive bloc.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{fig2_community_count}
+    \caption{Number of communities (InfoMap, weighted directed)
+             per layer over time.}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\linewidth]{fig2_hormuz_bloc_share}
+    \caption{Share of Hormuz exports that lands inside the primary
+             Hormuz community.}
+  \end{subfigure}
+  \caption{Community structure is stable year-to-year. The high and
+  flat curves for ammonia and LPG butane (right panel) confirm that
+  the Gulf-importer bloc is a persistent feature of those networks,
+  not a 2024-specific artefact.}
+  \label{fig:community-trajectories}
+\end{figure}
+
+\subsection{Resilience under Hormuz removal}
+
+The headline resilience finding is the asymmetric impact of removing
+Hormuz exporters across layers (Figure~\ref{fig:attack-flow-loss},
+Table~\ref{tab:attack}). LPG butane loses 48.5\,\% of trade volume
+and 32.4\,\% of weighted global efficiency in 2024; LPG propane and
+urea lose 26\,\% and 21\,\%. Wheat is essentially unaffected
+(0.13\,\% flow loss), reflecting the Gulf's role as a wheat importer,
+not exporter.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.46\textwidth}
+    \includegraphics[width=\linewidth]{fig2_attack_flow_loss}
+    \caption{Share of trade volume removed in 2024.}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.50\textwidth}
+    \includegraphics[width=\linewidth]{fig2_attack_efficiency}
+    \caption{Drop in global efficiency by year and layer.}
+  \end{subfigure}
+  \caption{Targeted Hormuz removal: LPG butane is the most fragile
+  layer; wheat the most resilient.}
+  \label{fig:attack-flow-loss}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Hormuz-removal damage (2024) by layer.}
+\label{tab:attack}
+\begin{tabular}{lcccc}
+\toprule
+Layer & Flow loss & Eff.\ drop & Importers cut & LWCC retained \\
+\midrule
+Wheat       & 0.13\,\% & $-3.8$\,\% & 0 & 0.98 \\
+Ammonia     & 12.7\,\% & 9.3\,\% & 0 & 0.97 \\
+Urea        & 21.3\,\% & 14.2\,\% & 0 & 0.97 \\
+LPG propane & 25.6\,\% & 9.3\,\% & 1 & 0.94 \\
+LPG butane  & \textbf{48.5\,\%} & \textbf{32.4\,\%} & 0 & 0.96 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The wheat \emph{negative} efficiency drop is a network-pruning
+artefact: removing Hormuz countries (which are wheat importers,
+not exporters) deletes minor re-export edges and shortens average
+weighted path lengths --- a benign effect that does not indicate any
+welfare gain.
+
+\paragraph{Severity gradient.}
+The five layers split cleanly into a three-tier exposure ranking:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.1em]
+  \item \emph{Critical} --- LPG butane (48.5\,\% volume loss,
+        32.4\,\% efficiency drop). The Gulf is the dominant
+        butane exporter and the importer ecosystem is tightly
+        clustered (88\,\% within-bloc concentration), so the network
+        has very little capacity to reroute.
+  \item \emph{Severe} --- LPG propane and urea
+        (21--26\,\% volume loss, $\approx\!10$--$14$\,\%
+        efficiency drop). LPG propane has more diverse exporters
+        (US shale gas, Algeria) so the residual network can absorb
+        some flow, while urea has high reciprocity allowing
+        partial substitution.
+  \item \emph{Mild} --- ammonia (12.7\,\% volume loss, 9.3\,\%
+        efficiency drop) and wheat (essentially unaffected).
+\end{itemize}
+
+\paragraph{Importer-cut count.}
+Only one country (in the LPG-propane layer) sees its in-degree drop
+to zero under the attack. This is a useful negative result: most
+``exposed'' countries do not lose all of their suppliers, they lose
+their \emph{cheapest and largest} suppliers. The economic cost is
+therefore better captured by the volume-loss and efficiency-drop
+metrics than by the binary ``is the country isolated'' indicator.
+
+\subsection{Time-series dynamics: VAR and impulse responses}
+
+Figure~\ref{fig:price-vs-dwt} overlays the global commodity prices
+with the normalised Hormuz tanker DWT series. Visually, all five
+prices co-move over the 2022--2023 period when DWT is rising;
+quantitatively, only \textbf{ammonia} (Granger $p = 0.010$)
+shows a statistically significant lead from DWT to price growth at a
+1-month horizon (Figure~\ref{fig:irf-ammonia}). The IRF peaks at
+$-0.015$ in $\Delta\!\log p$ at $h = 1$, confirming that a positive
+shock to Hormuz tanker capacity (more supply) lowers the
+fertilizer-proxy price.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{fig3_price_vs_DWT}
+  \caption{Global commodity prices vs Hormuz tanker DWT, 2020--2024.
+  Each panel shows the layer's log-price (left axis, coloured) and
+  the normalised Hormuz tanker DWT (right axis, grey dashed).}
+  \label{fig:price-vs-dwt}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.65\textwidth]{fig3_irf_ammonia}
+  \caption{Ammonia (DAP-proxy) impulse response: a $-1\sigma$ Hormuz
+  DWT shock raises $\Delta\!\log p$ by $\sim 0.015$ at one-month
+  horizon. The 95\,\% asymptotic CI does not cross zero at $h = 1$.}
+  \label{fig:irf-ammonia}
+\end{figure}
+
+\subsection{Spatial network contagion: SDM}
+
+The Spatial Durbin Model identifies a positive spatial-lag
+coefficient $\rho \approx 0.11$ for wheat, ammonia and LPG butane,
+suggestive of network co-movement of import volumes after
+controlling for direct exposure and price
+(Figure~\ref{fig:sdm-rho}). The estimates are significant at the
+10\,\% level given the small annual panel ($T = 5$), and translate
+into a Leontief amplifier $1/(1-\rho) \approx 1.13$ --- a 13\,\%
+amplification of any direct shock through the network.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.46\textwidth}
+    \includegraphics[width=\linewidth]{fig3_rho_by_layer}
+    \caption{SDM $\rho$ estimates by layer.}
+  \end{subfigure}\hfill
+  \begin{subfigure}{0.50\textwidth}
+    \includegraphics[width=\linewidth]{fig3_sdm_direct_indirect}
+    \caption{SLX direct ($\beta$) vs.\ indirect ($\theta$) effects.}
+  \end{subfigure}
+  \caption{Network contagion is small but consistent in sign for
+  the most-traded layers.}
+  \label{fig:sdm-rho}
+\end{figure}
+
+\subsection{Scenario simulation}
+
+The DWT profiles for the three scenarios and the resulting cross-
+layer impacts are shown in Figure~\ref{fig:scenario-comparison}.
+The 6-month realignment scenario (S3) projects the largest LPG
+disruptions: \$5.7\,billion in lost butane imports and \$4.5\,billion
+in lost propane imports globally over the year.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{fig4_scenario_comparison}
+  \caption{Left: DWT capacity profile for all three scenarios.
+  Right: aggregate annualised import-value impact by commodity for
+  the two short-horizon scenarios (S1 and S2). The 6-month
+  realignment is shown in the heatmap and country-ranking views
+  below but is excluded from this aggregate bar chart because the
+  IRF-driven price channel is extrapolated beyond its estimation
+  horizon under a sustained shock of that length.\
+  LPG layers carry essentially the entire negative impact; the small
+  positive bars for wheat / ammonia / urea reflect the price channel
+  and are an estimation artefact (\S\ref{sec:caveats}).}
+  \label{fig:scenario-comparison}
+\end{figure}
+
+\paragraph{Why are the wheat / ammonia / urea bars positive?}
+The simulation has two channels: a structural channel
+($\log(1 - \text{DE}\cdot\delta)$) and a price channel
+($\beta_{\log p}\!\cdot\!\Delta\!\log p$). For wheat, ammonia and urea,
+\emph{the structural channel is essentially zero for almost every
+country in the world} --- only $\sim\!1$--$13\,\%$ of these
+commodities transit Hormuz, so the average importer has DE near zero.
+The simulated impact is then dominated by the price channel: when
+Hormuz capacity falls, prices rise, and the SDM
+$\beta_{\log p}\!>\!0$ pushes \emph{nominal} imports up.
+
+This positive co-movement between prices and import volumes is a
+real feature of the 2020--2024 estimation window --- it includes the
+post-COVID food-security rush (governments stockpiling grain) and
+the 2022--23 fertilizer-price spike that triggered emergency
+fertilizer subsidies in importing countries. It does not mean these
+countries \emph{benefit} from a Hormuz disruption; it means our
+econometric channel cannot separate ``defensive stockpiling at high
+prices'' from ``ordinary demand response'' on this short panel. We
+therefore treat the LPG bars (where the structural channel
+dominates) as the policy-relevant signal and the wheat / ammonia /
+urea bars as estimation noise.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\textwidth]{fig4_heatmap_S3_6month_realignment}
+  \caption{S3 (6-month realignment) country~$\times$~layer heatmap of
+  average monthly log-import change for the top-40 importers.
+  Saturated red cells in the LPG columns identify
+  India, Bangladesh, Pakistan and Japan as the worst affected.}
+  \label{fig:heatmap-s3}
+\end{figure}
+
+The S3 country ranking is dominated by countries with both large
+absolute LPG imports and high Hormuz dependence. India is the
+single largest absolute loser (Table~\ref{tab:top-losers},
+Figure~\ref{fig:top-losers}); its LPG propane and butane DE
+exceed 0.96, so a 70\,\% Hormuz capacity reduction sustained for
+six months translates into a 46--52\,\% average monthly import
+shortfall on those layers.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Top-10 absolute dollar losers under S3 (6-month
+realignment). Total dollar = annualised import-value loss across
+all five layers.}
+\label{tab:top-losers}
+\begin{tabular}{lrr}
+\toprule
+Country & Annual loss (USD M) & \% of 2024 baseline \\
+\midrule
+India       & $-7\,630$ & $-42$ \\
+China       & $-2\,512$ & $-10$ \\
+Thailand    & $-572$    & $-17$ \\
+Indonesia   & $-340$    & $-5$  \\
+Australia   & $-284$    & $-17$ \\
+Singapore   & $-85$     & $-26$ \\
+Malaysia    & $-79$     & $-8$  \\
+Philippines & $-69$     & $-2$  \\
+South Africa& $-34$     & $-3$  \\
+New Zealand & $-31$     & $-7$  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig4_top_losers}
+  \caption{Top-30 most-affected countries under S3, ranked by
+  absolute annual dollar impact. India is an outlier driven by
+  $\approx\!97\,\%$ Hormuz dependence on LPG.}
+  \label{fig:top-losers}
+\end{figure}
+
+% =====================================================================
+\section{Discussion and limitations}\label{sec:caveats}
+% =====================================================================
+
+\paragraph{Robust findings.}
+The structural picture is clear and consistent across methods:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.1em]
+  \item Hormuz removal is asymmetric across commodity layers, with
+        LPG butane losing nearly half of global trade volume.
+  \item Country-level exposure to Hormuz disruption is concentrated
+        in a handful of large LPG-importing economies: India, China,
+        Thailand, Indonesia, Australia, Singapore.
+  \item The composite exposure score correlates with --- but is not
+        identical to --- the simpler bilateral dependence index DE,
+        confirming that network position adds information beyond
+        the trade ratio alone.
+  \item Hormuz tanker capacity Granger-causes the DAP fertilizer
+        price at a 1-month horizon ($p = 0.010$), with an IRF
+        consistent in sign across all five layers.
+  \item A small but consistent network contagion coefficient
+        ($\rho \approx 0.11$) implies that direct shocks are
+        amplified by $\sim\!13\,\%$ through bilateral co-movement.
+\end{itemize}
+
+\paragraph{Estimates that should be read with caution.}
+The panel-regression coefficients $\beta_{\log p}$ and $\beta_{DWT}$
+suffer near-collinearity with the time fixed effects (both regressors
+are global, time-only series), so individual signs are not
+identified --- only the country-varying interaction $\gamma_3$ is
+robustly estimated. The DAP price stands in for ammonia, and
+LNG-Japan for LPG butane; both are imperfect proxies and likely
+understate spot-market transmission.
+
+\paragraph{The wheat / ammonia ``positive'' result.}
+The S2--S3 mean-percentage-change bars for wheat and ammonia are
+slightly positive (Figure~\ref{fig:scenario-comparison}). This is an
+artefact of the price channel: under our 2020--2024 estimation
+window, log-prices and log-imports co-move positively (both rose
+during the COVID--Ukraine shock years), and the SDM
+$\beta_{\log p}$ inherits that correlation. We do not interpret it
+as a structural elasticity; the structural channel for wheat is
+near zero (Hormuz carries 0.1\,\% of wheat trade), so the residual
+price effect dominates the average. The dollar impact on wheat
+remains within the noise band of the estimation.
+
+\paragraph{Other limitations.}
+The simulation holds the 2020 trade matrix fixed and does not model
+substitution. In reality, India and China would source LPG from the
+US, Australia or West Africa at a price premium, so the
+\emph{volume} losses we report are upper bounds and the realised
+\emph{cost} losses (including substitution surcharges) may be higher
+in dollar terms but distributed differently. Reserves data from
+JODI could in principle inform a buffer-stock extension; we leave
+that for future work.
+
+% =====================================================================
+\section{Conclusion}
+% =====================================================================
+
+This study quantifies the trade-network exposure of five commodity
+layers to a Strait of Hormuz disruption, combining static
+network-topology, community detection and targeted-attack analysis
+with time-series and spatial econometrics, and integrates the two
+into a transparent scenario simulation engine.
+
+The empirical answer is unambiguous: \textbf{LPG is the systemic
+vulnerability}. Wheat and most fertilizers can absorb a Hormuz
+closure with modest re-routing; LPG cannot, because the Gulf
+supplies nearly half of the world's seaborne butane and a quarter
+of the world's propane. A 6-month closure scenario translates into
+a \$10.2 billion annualised global LPG import loss, with India alone
+accounting for three-quarters of the impact.
+
+Two methodological lessons emerge. First, the trade-network
+literature's standard topology metrics (density, clustering,
+efficiency) miss the asymmetric exposure to a regional disruption
+unless complemented by a node-removal experiment that respects
+edge weights. Second, the spatial-econometric multiplier --- though
+small in our marginal estimates --- compounds across countries and
+should be a default amplifier in policy scenario engines.
+
+% =====================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
